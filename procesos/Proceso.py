@@ -33,5 +33,6 @@ class Proceso():
             hilo = threading.Thread(target=p.define_actividad)
             hilo.start()
 
-proceso = Proceso("HiloGeneral","general")
-proceso.crea_proceso(10)
+    def info(self):
+        return f"Nombre del proceso: {self.nombre_proceso}"
+
