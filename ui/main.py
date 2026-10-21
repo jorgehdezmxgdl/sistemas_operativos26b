@@ -1,147 +1,139 @@
-import tkinter as tk
-from tkinter import ttk
-from tkinter import messagebox
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+import tkinter as tk
+from tkinter import ttk, messagebox
+import random
+from procesos.Proceso import Proceso
+from estructura.Cola import Encolamiento
+
+QUANTUM = 3
+TICK_MS = 600
+COLORES = ['#FFB3BA','#BAFFC9','#BAE1FF','#FFFFBA','#E0BBE4','#FEC8D8','#D0F4DE']
 
 class Application:
     def __init__(self, root):
         self.root = root
-        root.title("Configuración de procesos")
-        root.geometry("520x380")
+        root.title("SO · Planificador de Procesos")
+        root.geometry("560x720")
         root.update_idletasks()
-        root.geometry(
-            f"+{(root.winfo_screenwidth() - 520) // 2}"
-            f"+{(root.winfo_screenheight() - 380) // 2}"
-        )
+        root.geometry(f"+{(root.winfo_screenwidth()-560)//2}+{(root.winfo_screenheight()-720)//2}")
 
         menubar = tk.Menu(root)
-        self.archivo_menu = tk.Menu(menubar, tearoff=0)
-        self.archivo_menu.add_command(label="Cerrar app", command=self.on_archivo_cerrar_app)
-        menubar.add_cascade(label="Archivo", menu=self.archivo_menu)
-        self.procesos_menu = tk.Menu(menubar, tearoff=0)
-        self.procesos_menu.add_command(label="Visor", command=self.on_procesos_visor)
-        self.procesos_menu.add_command(label="Planificador", command=self.on_procesos_planificador)
-        self.procesos_menu.add_separator()
-        menubar.add_cascade(label="Procesos", menu=self.procesos_menu)
+        archivo = tk.Menu(menubar, tearoff=0)
+        archivo.add_command(label="Cerrar app", command=root.destroy)
+        menubar.add_cascade(label="Archivo", menu=archivo)
+        procesos = tk.Menu(menubar, tearoff=0)
+        procesos.add_command(label="Visor", command=self.on_procesos_visor)
+        procesos.add_command(label="Planificador", command=self.on_procesos_planificador)
+        menubar.add_cascade(label="Procesos", menu=procesos)
         root.configure(menu=menubar)
 
-        self.w1 = tk.Label(root, text="Ejecutar App")
-        self.w1.place(x=20, y=40, width=90, height=26)
+        tk.Label(root, text="App a ejecutar:").place(x=20, y=15)
+        self.cmbApp = ttk.Combobox(root, values=["Spotify","Calculadora","Bloc de Notas","Compaq"], state="readonly")
+        self.cmbApp.place(x=120, y=12, width=160, height=26)
+        self.cmbApp.current(0)
+        tk.Button(root, text="Crear proceso", bg="#4CAF50", fg="white",
+                  command=self.on_crear_proceso).place(x=300, y=10, width=120, height=30)
+        tk.Button(root, text="Pausar / Continuar", bg="#FF9800",
+                  command=self.on_toggle).place(x=430, y=10, width=120, height=30)
 
-        self.w_cmbApp = ttk.Combobox(root, values=["Spotify", "Calculadora", "Bloc de Notas", "Compaq"])
-        self.w_cmbApp.place(x=130, y=38, width=160, height=28)
+        self.notebook = ttk.Notebook(root)
+        self.notebook.place(x=20, y=55, width=520, height=200)
+        for t in ["Spotify","Calculadora","Bloc de Notas","Compaq"]:
+            self.notebook.add(ttk.Frame(self.notebook), text=t)
 
-        self.btnEjecutarProceso = tk.Button(root, text="Ejecutar proceso", command=self.on_btnEjecutarProceso)
-        self.btnEjecutarProceso.place(x=310, y=36, width=170, height=30)
+        tk.Label(root, text="  Estados del Sistema Operativo  ⬇",
+                 font=("Arial",11,"bold")).place(x=20, y=265)
+        self.canvas = tk.Canvas(root, bg="#1e1e1e", highlightthickness=0)
+        self.canvas.place(x=20, y=290, width=520, height=400)
 
-        self.notebook1 = ttk.Notebook(root)
-        self.notebook1_tab1 = ttk.Frame(self.notebook1)
-        self.notebook1.add(self.notebook1_tab1, text="Spotify")
-        self.notebook1_tab2 = ttk.Frame(self.notebook1)
-        self.notebook1.add(self.notebook1_tab2, text="Calculadora")
-        self.notebook1_tab3 = ttk.Frame(self.notebook1)
-        self.notebook1.add(self.notebook1_tab3, text="Bloc de notas")
-        self.notebook1_tab4 = ttk.Frame(self.notebook1)
-        self.notebook1.add(self.notebook1_tab4, text="Compaq")
-        self.notebook1.place(x=30, y=105, width=460, height=170)
+        self.cola_listos = Encolamiento()
+        self.procesos = []
+        self.cpu = None
+        self.bloqueados = []
+        self.terminados = []
+        self.contador = 0
+        self.pausado = False
+        self.tick()
 
-        self.label2 = tk.Label(self.notebook1_tab1, text="Seleccionar canción")
-        self.label2.place(x=30, y=20, width=140, height=30)
+    def on_crear_proceso(self):
+        app = self.cmbApp.get()
+        self.contador += 1
+        nombre = f"P{self.contador}"
+        actividad = random.choice(["suma","resta","multiplicacion","division"])
+        p = Proceso(nombre, actividad)
+        p.estado = "listo"
+        p.quantum = QUANTUM
+        p.ticks_bloq = 0
+        p.color = random.choice(COLORES)
+        p.app = app
+        self.cola_listos.adiciona(p)
+        self.procesos.append(p)
 
-        self.button2 = tk.Button(self.notebook1_tab1, text="Anterior", command=self.on_button2)
-        self.button2.place(x=40, y=85, width=96, height=32)
+    def on_toggle(self):
+        self.pausado = not self.pausado
 
-        self.button3 = tk.Button(self.notebook1_tab1, text="Reproducir", command=self.on_button3)
-        self.button3.place(x=182, y=85, width=96, height=32)
+    def tick(self):
+        if not self.pausado:
+            if self.cpu is None and not self.cola_listos.esta_vacio():
+                self.cpu = self.cola_listos.sig_elemento_procesar()
+                self.cpu.estado = "ejecutando"
+                self.cpu.quantum = QUANTUM
 
-        self.button4 = tk.Button(self.notebook1_tab1, text="Siguiente", command=self.on_button4)
-        self.button4.place(x=330, y=85, width=96, height=32)
+            if self.cpu is not None:
+                self.cpu.quantum -= 1
+                if random.random() < 0.18:
+                    self.cpu.estado = "bloqueado"
+                    self.cpu.ticks_bloq = random.randint(2, 4)
+                    self.bloqueados.append(self.cpu)
+                    self.cpu = None
+                elif random.random() < 0.12:
+                    self.cpu.estado = "terminado"
+                    self.terminados.append(self.cpu)
+                    self.cpu = None
+                elif self.cpu.quantum <= 0:
+                    self.cpu.estado = "listo"
+                    self.cola_listos.adiciona(self.cpu)
+                    self.cpu = None
 
-        self.listCanciones = tk.Listbox(self.notebook1_tab1)
-        self.listCanciones.insert("end", "The fate of Ophellia")
-        self.listCanciones.insert("end", "Danceteria")
-        self.listCanciones.insert("end", "We can´t be friends")
-        self.listCanciones.place(x=176, y=20, width=250, height=60)
+            for p in list(self.bloqueados):
+                p.ticks_bloq -= 1
+                if p.ticks_bloq <= 0:
+                    p.estado = "listo"
+                    self.bloqueados.remove(p)
+                    self.cola_listos.adiciona(p)
 
-        self.label4 = tk.Label(self.notebook1_tab2, text="Número")
-        self.label4.place(x=30, y=20, width=90, height=26)
+            self.dibujar()
+        self.root.after(TICK_MS, self.tick)
 
-        self.txtNumero = tk.Entry(self.notebook1_tab2)
-        self.txtNumero.place(x=120, y=18, width=150, height=28)
-
-        self.btnSuma = tk.Button(self.notebook1_tab2, text="+", command=self.on_btnSuma)
-        self.btnSuma.place(x=60, y=80, width=40, height=30)
-
-        self.btnResta = tk.Button(self.notebook1_tab2, text="-", command=self.on_btnResta)
-        self.btnResta.place(x=100, y=80, width=30, height=30)
-
-        self.btnMutiplica = tk.Button(self.notebook1_tab2, text="X", command=self.on_btnMutiplica)
-        self.btnMutiplica.place(x=130, y=80, width=30, height=30)
-
-        self.btnDivide = tk.Button(self.notebook1_tab2, text="/", command=self.on_btnDivide)
-        self.btnDivide.place(x=155, y=80, width=30, height=30)
-
-        self.btnIgual = tk.Button(self.notebook1_tab2, text="=", command=self.on_btnIgual)
-        self.btnIgual.place(x=185, y=80, width=30, height=30)
-
-        self.txtCalculadora = tk.Text(self.notebook1_tab2, state="disabled")
-        self.txtCalculadora.place(x=318, y=7, width=120, height=110)
-
-        self.txtEditor = tk.Text(self.notebook1_tab3)
-        self.txtEditor.place(x=10, y=10, width=440, height=120)
-
-        self.btnCargar = tk.Button(self.notebook1_tab4, text="Cargar nómina", command=self.on_btnCargar)
-        self.btnCargar.place(x=20, y=50, width=120, height=30)
-
-        self.btnProcesar = tk.Button(self.notebook1_tab4, text="Procesar", command=self.on_btnProcesar)
-        self.btnProcesar.place(x=176, y=48, width=96, height=32)
-
-        self.btnImprimir = tk.Button(self.notebook1_tab4, text="Imprimir", command=self.on_btnImprimir)
-        self.btnImprimir.place(x=318, y=46, width=96, height=32)
-
-    def on_btnEjecutarProceso(self):
-        pass
-
-    def on_button2(self):
-        pass
-
-    def on_button3(self):
-        pass
-
-    def on_button4(self):
-        pass
-
-    def on_btnSuma(self):
-        pass
-
-    def on_btnResta(self):
-        pass
-
-    def on_btnMutiplica(self):
-        pass
-
-    def on_btnDivide(self):
-        pass
-
-    def on_btnIgual(self):
-        pass
-
-    def on_btnCargar(self):
-        pass
-
-    def on_btnProcesar(self):
-        pass
-
-    def on_btnImprimir(self):
-        pass
-
-    def on_archivo_cerrar_app(self):
-        if messagebox.askyesno("Message", "Hello!"):
-            pass  # TODO: what happens when they say yes
+    def dibujar(self):
+        self.canvas.delete("all")
+        areas = [
+            ("LISTOS",     [p for p in self.procesos if p.estado=="listo"],     "#4CAF50"),
+            ("CPU",        [self.cpu] if self.cpu else [],                      "#FF9800"),
+            ("BLOQUEADOS", self.bloqueados,                                     "#2196F3"),
+            ("TERMINADOS", self.terminados[-6:],                                "#9E9E9E"),
+        ]
+        w = 120
+        for i,(titulo,lista,color) in enumerate(areas):
+            x = 10 + i*(w+10)
+            self.canvas.create_rectangle(x, 10, x+w, 385, outline=color, width=2, fill="#2a2a2a")
+            self.canvas.create_text(x+w//2, 28, text=titulo, fill=color, font=("Arial",11,"bold"))
+            if titulo == "CPU" and lista:
+                self.canvas.create_text(x+w//2, 48, text=f"q={lista[0].quantum}", fill="yellow", font=("Arial",9))
+            for j,p in enumerate(lista[:7]):
+                y = 65 + j*42
+                self.canvas.create_rectangle(x+5, y, x+w-5, y+36, fill=p.color, outline="black")
+                self.canvas.create_text(x+w//2, y+12, text=p.nombre_proceso, font=("Arial",10,"bold"))
+                self.canvas.create_text(x+w//2, y+26, text=f"{p.app} · {p.actividad}", font=("Arial",8))
 
     def on_procesos_visor(self):
-        pass
-
+        messagebox.showinfo("Visor", f"Procesos creados: {len(self.procesos)}")
     def on_procesos_planificador(self):
-        pass
+        messagebox.showinfo("Planificador", f"Algoritmo: Round-Robin\nQuantum: {QUANTUM} ticks")
 
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = Application(root)
+    root.mainloop()
